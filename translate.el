@@ -42,6 +42,7 @@
   (let ((cmd (format "trans -brief :zh %s" (shell-quote-argument text))))
     (string-trim (shell-command-to-string cmd))))
 
+;;;###autoload
 (defun translate()
   "Translate."
   (interactive)
