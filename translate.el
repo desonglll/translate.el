@@ -24,6 +24,17 @@
   (interactive)
   (message "hello world from translate."))
 
+(defun translate-find-nearest-word()
+  "Find nearest word."
+  (or
+   (thing-at-point 'word t)
+   (save-excursion
+     (backward-word)
+     (thing-at-point 'word t))
+   (save-excursion
+     (forward-word)
+     (thing-at-point 'word t))))
+
 (defun translate-get-selection()
   "Get content in selection area."
   (interactive)
@@ -31,11 +42,11 @@
          (if (use-region-p)
              (buffer-substring-no-properties (region-beginning) (region-end))
            (thing-at-point 'word t))))
-    (if (string-blank-p input)
-        (progn
-          nil)
-      (progn
-        (string-trim input)))))
+    (cond
+     ((null input) (translate-find-nearest-word))
+
+     ((string-blank-p input) (translate-find-nearest-word))
+     (t (string-trim input)))))
 
 (defun translate-get-translation-argos(text)
   "Get translation of TEXT using argos."
@@ -49,20 +60,30 @@
     (string-trim (shell-command-to-string cmd))))
 
 ;;;###autoload
-(defun translate-trans()
-  "Translate."
-  (interactive)
-  (let ((text (translate-get-selection)))
+(defun translate-trans(&optional arg)
+  "Translate.
+With prefix argument ARG, prompt for manual input."
+  (interactive "P")
+  (let ((text
+         (if arg
+             (read-string "Translate text: ")
+         (translate-get-selection))))
     (when text
+      (message "text: %s" text)
       (let ((result (translate-get-translation-trans text)))
         (message "result: %s" result)))))
 
 ;;;###autoload
-(defun translate-argo()
-  "Translate using argo."
-  (interactive)
-  (let ((text (translate-get-selection)))
+(defun translate-argo(&optional arg)
+  "Translate using argo.
+With prefix argument ARG, prompt for manual input."
+  (interactive "P")
+  (let ((text
+         (if arg
+             (read-string "Translate text: ")
+           (translate-get-selection))))
     (when text
+      (message "text: %s" text)
       (let ((result (translate-get-translation-argos text)))
         (message "result: %s" result)))))
 
