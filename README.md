@@ -14,8 +14,8 @@
 
 You must have the underlying command-line tools installed for the translation to work:
 
-1. **For `translate-trans` **: Install [translate-shell](https://github.com/soimort/translate-shell) (often provided as `trans`).
-2. **For `translate-argo` **: Install [argos-translate](https://github.com/argosopentech/argos-translate).
+1. **For `translate-trans`**: Install [translate-shell](https://github.com/soimort/translate-shell) (often provided as `trans`).
+2. **For `translate-argo`**: Install [argos-translate](https://github.com/argosopentech/argos-translate).
 
 ## Installation
 
