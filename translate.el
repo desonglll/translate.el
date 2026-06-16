@@ -37,18 +37,33 @@
       (progn
         (string-trim input)))))
 
-(defun translate-get-translation(text)
+(defun translate-get-translation-argos(text)
+  "Get translation of TEXT using argos."
+  (let ((cmd (format "argos-translate --from en --to zh %s" (shell-quote-argument text))))
+    (string-trim (shell-command-to-string cmd))))
+
+
+(defun translate-get-translation-trans(text)
   "Get translation of TEXT using trans."
   (let ((cmd (format "trans -brief :zh %s" (shell-quote-argument text))))
     (string-trim (shell-command-to-string cmd))))
 
 ;;;###autoload
-(defun translate()
+(defun translate-trans()
   "Translate."
   (interactive)
   (let ((text (translate-get-selection)))
     (when text
-      (let ((result (translate-get-translation text)))
+      (let ((result (translate-get-translation-trans text)))
+        (message "result: %s" result)))))
+
+;;;###autoload
+(defun translate-argo()
+  "Translate using argo."
+  (interactive)
+  (let ((text (translate-get-selection)))
+    (when text
+      (let ((result (translate-get-translation-argos text)))
         (message "result: %s" result)))))
 
 (provide 'translate)
