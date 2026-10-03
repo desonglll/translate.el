@@ -20,6 +20,7 @@
 ;;; Code:
 
 (require 'json)
+(require 'seq)
 (require 'url)
 (require 'subr-x)
 
@@ -106,12 +107,19 @@ automatically."
 
 (defun translate-volcengine--api-key ()
   "Return the configured Volcengine API key."
-  (or translate-volcengine-api-key
-      (getenv translate-volcengine-api-key-env-var)
-      (getenv "VOLCENGINE_API_KEY")
+  (let ((api-key
+         (seq-find
+          (lambda (value)
+            (and value (not (string-blank-p value))))
+          (list
+           (getenv translate-volcengine-api-key-env-var)
+           (getenv "VOLCENGINE_API_KEY")
+           translate-volcengine-api-key))))
+    (if api-key
+        (string-trim api-key)
       (user-error
        "Missing Volcengine API key. Set `translate-volcengine-api-key' or %s"
-       translate-volcengine-api-key-env-var)))
+       translate-volcengine-api-key-env-var))))
 
 (defun translate-volcengine--request-id ()
   "Return a unique request id for Volcengine."
