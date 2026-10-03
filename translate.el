@@ -147,6 +147,27 @@ automatically."
      (and value (not (string-blank-p value))))
    values))
 
+(defun translate--json-escape-char (char)
+  "Return CHAR escaped for JSON when it is non-ASCII."
+  (cond
+   ((<= char #x7f) (char-to-string char))
+   ((<= char #xffff) (format "\\u%04x" char))
+   (t
+    (let ((code (- char #x10000)))
+      (format "\\u%04x\\u%04x"
+              (+ #xd800 (ash code -10))
+              (+ #xdc00 (logand code #x3ff)))))))
+
+(defun translate--json-escape-nonascii (json)
+  "Escape non-ASCII characters in JSON."
+  (mapconcat #'translate--json-escape-char json ""))
+
+(defun translate--json-encode-utf-8 (object)
+  "Return OBJECT encoded as UTF-8 JSON bytes."
+  (encode-coding-string
+   (translate--json-escape-nonascii (json-encode object))
+   'utf-8))
+
 (defun translate-volcengine--api-key ()
   "Return the configured Volcengine API key."
   (let ((api-key (translate--first-nonblank
@@ -269,13 +290,11 @@ TARGET-LANGUAGE defaults to `translate-volcengine-target-language'."
             ("X-Api-Resource-Id" . ,translate-volcengine-resource-id)
             ("X-Api-Request-Id" . ,(translate-volcengine--request-id))))
          (url-request-data
-          (encode-coding-string
-           (json-encode
-            (if (and source-language
-                     (not (string-blank-p source-language)))
-                (append body `((source_language . ,source-language)))
-              body))
-           'utf-8))
+          (translate--json-encode-utf-8
+           (if (and source-language
+                    (not (string-blank-p source-language)))
+               (append body `((source_language . ,source-language)))
+             body)))
          (buffer (url-retrieve-synchronously translate-volcengine-endpoint
                                              t t 30)))
     (unless buffer
@@ -320,7 +339,7 @@ TARGET-LANGUAGE defaults to `translate-volcengine-ark-target-language'."
             ("Authorization" . ,(concat "Bearer "
                                         (translate-volcengine-ark--api-key)))))
          (url-request-data
-          (encode-coding-string (json-encode body) 'utf-8))
+          (translate--json-encode-utf-8 body))
          (buffer (url-retrieve-synchronously translate-volcengine-ark-endpoint
                                              t t 30)))
     (unless buffer
