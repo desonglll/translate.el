@@ -7,7 +7,7 @@
 * **Context Aware**: Automatically detects text in the active region or the word at point.
 * **Smart Fallback**: If no word is found at the exact cursor position, it intelligently searches for the nearest word.
 * **Interactive Input**: Supports manual input via `universal-argument` (`C-u`).
-* **Multiple Backends**: Currently supports `translate-shell` (`trans`), `argos-translate`, and Volcengine machine translation.
+* **Multiple Backends**: Currently supports `translate-shell` (`trans`), `argos-translate`, Volcengine machine translation, and Volcengine Ark.
 * **Zero-Dependency Core**: Only standard Emacs Lisp.
 
 ## Requirements
@@ -17,6 +17,7 @@ You must have the underlying command-line tools installed for the translation to
 1. **For `translate-trans`**: Install [translate-shell](https://github.com/soimort/translate-shell) (often provided as `trans`).
 2. **For `translate-argo`**: Install [argos-translate](https://github.com/argosopentech/argos-translate).
 3. **For `translate-volcengine`**: Set `VOLCENGINE_TRANSLATE_API_KEY` or configure `translate-volcengine-api-key`.
+4. **For `translate-volcengine-ark`**: Set `ARK_API_KEY` or `VOLCENGINE_ARK_API_KEY`.
 
 ## Installation
 
@@ -44,7 +45,7 @@ In `config.el`:
 
 ```elisp
 (use-package! translate
-  :commands (translate-trans translate-argo translate-volcengine))
+  :commands (translate-trans translate-argo translate-volcengine translate-volcengine-ark))
 
 ```
 
@@ -55,6 +56,7 @@ In `config.el`:
 | `M-x translate-trans` | Translate text using `trans` (translate-shell). |
 | `M-x translate-argo` | Translate text using `argos-translate`. |
 | `M-x translate-volcengine` | Translate text using Volcengine machine translation. |
+| `M-x translate-volcengine-ark` | Translate text using Volcengine Ark. |
 
 ### Prefix Arguments
 
@@ -77,6 +79,20 @@ By default it translates to Chinese:
 
 ```elisp
 (setq translate-volcengine-target-language "zh")
+```
+
+### Volcengine Ark
+
+`translate-volcengine-ark` uses the Volcengine Ark Chat Completions API with
+Bearer token authentication. By default it reads `ARK_API_KEY` or
+`VOLCENGINE_ARK_API_KEY` and uses `doubao-seed-translation-250915`.
+
+```elisp
+(setq translate-volcengine-ark-api-key
+      (or (getenv "ARK_API_KEY")
+          (getenv "VOLCENGINE_ARK_API_KEY")))
+
+(setq translate-volcengine-ark-model "doubao-seed-translation-250915")
 ```
 
 ### Example Keybinding (Doom)

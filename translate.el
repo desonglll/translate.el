@@ -65,6 +65,41 @@ automatically."
   :type '(choice (const :tag "Auto detect" nil) string)
   :group 'translate)
 
+(defcustom translate-volcengine-ark-api-key nil
+  "API key for Volcengine Ark translation."
+  :type '(choice (const :tag "Unset" nil) string)
+  :group 'translate)
+
+(defcustom translate-volcengine-ark-api-key-env-vars
+  '("ARK_API_KEY" "VOLCENGINE_ARK_API_KEY")
+  "Environment variables used as fallback for the Volcengine Ark API key."
+  :type '(repeat string)
+  :group 'translate)
+
+(defcustom translate-volcengine-ark-endpoint
+  "https://ark.cn-beijing.volces.com/api/v3/chat/completions"
+  "Volcengine Ark Chat Completions endpoint."
+  :type 'string
+  :group 'translate)
+
+(defcustom translate-volcengine-ark-model "doubao-seed-translation-250915"
+  "Default Volcengine Ark model for `translate-volcengine-ark'."
+  :type 'string
+  :group 'translate)
+
+(defcustom translate-volcengine-ark-target-language "zh"
+  "Default target language for `translate-volcengine-ark'."
+  :type 'string
+  :group 'translate)
+
+(defcustom translate-volcengine-ark-source-language nil
+  "Default source language for `translate-volcengine-ark'.
+
+When nil or an empty string, the model detects the source language
+automatically."
+  :type '(choice (const :tag "Auto detect" nil) string)
+  :group 'translate)
+
 (defun translate-hello-world()
   "Hello world from translate-hello-world."
   (interactive)
@@ -105,21 +140,37 @@ automatically."
   (let ((cmd (format "trans -brief :zh %s" (shell-quote-argument text))))
     (string-trim (shell-command-to-string cmd))))
 
+(defun translate--first-nonblank (values)
+  "Return the first nonblank string in VALUES."
+  (seq-find
+   (lambda (value)
+     (and value (not (string-blank-p value))))
+   values))
+
 (defun translate-volcengine--api-key ()
   "Return the configured Volcengine API key."
-  (let ((api-key
-         (seq-find
-          (lambda (value)
-            (and value (not (string-blank-p value))))
-          (list
-           (getenv translate-volcengine-api-key-env-var)
-           (getenv "VOLCENGINE_API_KEY")
-           translate-volcengine-api-key))))
+  (let ((api-key (translate--first-nonblank
+                  (list
+                   (getenv translate-volcengine-api-key-env-var)
+                   (getenv "VOLCENGINE_API_KEY")
+                   translate-volcengine-api-key))))
     (if api-key
         (string-trim api-key)
       (user-error
        "Missing Volcengine API key. Set `translate-volcengine-api-key' or %s"
        translate-volcengine-api-key-env-var))))
+
+(defun translate-volcengine-ark--api-key ()
+  "Return the configured Volcengine Ark API key."
+  (let ((api-key (translate--first-nonblank
+                  (append
+                   (mapcar #'getenv translate-volcengine-ark-api-key-env-vars)
+                   (list translate-volcengine-ark-api-key)))))
+    (if api-key
+        (string-trim api-key)
+      (user-error
+       "Missing Volcengine Ark API key. Set `translate-volcengine-ark-api-key' or one of %s"
+       (string-join translate-volcengine-ark-api-key-env-vars ", ")))))
 
 (defun translate-volcengine--request-id ()
   "Return a unique request id for Volcengine."
@@ -155,6 +206,36 @@ automatically."
       (unless translations
         (user-error "Volcengine response did not include translations"))
       translations)))
+
+(defun translate-volcengine-ark--message-content (response)
+  "Extract message content from a Volcengine Ark RESPONSE."
+  (let ((error (alist-get 'error response)))
+    (when error
+      (user-error "Volcengine Ark translation failed: code=%s message=%s"
+                  (alist-get 'code error)
+                  (alist-get 'message error))))
+  (let* ((choices (alist-get 'choices response))
+         (choice (car choices))
+         (message (alist-get 'message choice))
+         (content (alist-get 'content message)))
+    (unless (and content (not (string-blank-p content)))
+      (user-error "Volcengine Ark response did not include translation content"))
+    (string-trim content)))
+
+(defun translate-volcengine-ark--system-prompt
+    (source-language target-language)
+  "Return system prompt for SOURCE-LANGUAGE and TARGET-LANGUAGE."
+  (string-join
+   (delq
+    nil
+    (list
+     "You are a professional translation engine."
+     (if (and source-language (not (string-blank-p source-language)))
+         (format "Translate from %s to %s." source-language target-language)
+       (format "Detect the source language and translate to %s." target-language))
+     "Only return the translated text."
+     "Preserve the original meaning, formatting, and line breaks where possible."))
+   " "))
 
 (defun translate-get-translation-volcengine
     (text &optional source-language target-language)
@@ -192,6 +273,42 @@ TARGET-LANGUAGE defaults to `translate-volcengine-target-language'."
            (translate-volcengine--translations
             (translate-volcengine--parse-response))
            "\n"))
+      (kill-buffer buffer))))
+
+(defun translate-get-translation-volcengine-ark
+    (text &optional source-language target-language)
+  "Get translation of TEXT using Volcengine Ark.
+
+SOURCE-LANGUAGE defaults to `translate-volcengine-ark-source-language'.
+TARGET-LANGUAGE defaults to `translate-volcengine-ark-target-language'."
+  (let* ((source-language (or source-language
+                              translate-volcengine-ark-source-language))
+         (target-language (or target-language
+                              translate-volcengine-ark-target-language))
+         (messages
+          `[((role . "system")
+             (content . ,(translate-volcengine-ark--system-prompt
+                          source-language target-language)))
+            ((role . "user")
+             (content . ,text))])
+         (body `((model . ,translate-volcengine-ark-model)
+                 (messages . ,messages)
+                 (temperature . 0)))
+         (url-request-method "POST")
+         (url-request-extra-headers
+          `(("Content-Type" . "application/json")
+            ("Authorization" . ,(concat "Bearer "
+                                        (translate-volcengine-ark--api-key)))))
+         (url-request-data
+          (encode-coding-string (json-encode body) 'utf-8))
+         (buffer (url-retrieve-synchronously translate-volcengine-ark-endpoint
+                                             t t 30)))
+    (unless buffer
+      (user-error "Volcengine Ark translation request timed out"))
+    (unwind-protect
+        (with-current-buffer buffer
+          (translate-volcengine-ark--message-content
+           (translate-volcengine--parse-response)))
       (kill-buffer buffer))))
 
 ;;;###autoload
@@ -234,6 +351,20 @@ With prefix argument ARG, prompt for manual input."
     (when text
       (message "text: %s" text)
       (let ((result (translate-get-translation-volcengine text)))
+        (message "result: %s" result)))))
+
+;;;###autoload
+(defun translate-volcengine-ark (&optional arg)
+  "Translate using Volcengine Ark.
+With prefix argument ARG, prompt for manual input."
+  (interactive "P")
+  (let ((text
+         (if arg
+             (read-string "Translate text: ")
+           (translate-get-selection))))
+    (when text
+      (message "text: %s" text)
+      (let ((result (translate-get-translation-volcengine-ark text)))
         (message "result: %s" result)))))
 
 (provide 'translate)
