@@ -63,7 +63,8 @@ In `config.el`:
 Translation commands support the `universal-argument` (`C-u`):
 
 * **Default (No prefix)**: Automatically translates the current selection or the word at point.
-* **With `C-u**`: Prompts for manual input in the minibuffer.
+* **With `C-u` for `translate-trans`, `translate-argo`, and `translate-volcengine`**: Prompts for manual input in the minibuffer.
+* **With `C-u` for `translate-volcengine-ark`**: Selects and saves the target language before translating.
 
 ### Volcengine
 
@@ -94,6 +95,14 @@ also set `translate-volcengine-ark-model` to a Volcengine Ark endpoint id.
           (getenv "VOLCENGINE_ARK_API_KEY")))
 
 (setq translate-volcengine-ark-model "doubao-seed-translation-250915")
+
+(setq translate-volcengine-ark-target-language "en")
+
+(setq translate-volcengine-ark-target-languages
+      '(("Chinese" . "zh")
+        ("English" . "en")
+        ("Japanese" . "ja")
+        ("Korean" . "ko")))
 ```
 
 ### Example Keybinding (Doom)

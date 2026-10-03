@@ -92,6 +92,22 @@ automatically."
   :type 'string
   :group 'translate)
 
+(defcustom translate-volcengine-ark-target-languages
+  '(("Chinese" . "zh")
+    ("English" . "en")
+    ("Japanese" . "ja")
+    ("Korean" . "ko")
+    ("French" . "fr")
+    ("German" . "de")
+    ("Spanish" . "es")
+    ("Russian" . "ru"))
+  "Target language candidates for `translate-volcengine-ark'.
+
+Each item is either a language code string or a cons cell of display
+name and language code."
+  :type '(repeat (choice string (cons string string)))
+  :group 'translate)
+
 (defcustom translate-volcengine-ark-source-language nil
   "Default source language for `translate-volcengine-ark'.
 
@@ -271,6 +287,41 @@ automatically."
       (user-error "Volcengine Ark response did not include translation content"))
     (string-trim text)))
 
+(defun translate-volcengine-ark--language-display (language)
+  "Return display text for LANGUAGE."
+  (if (consp language)
+      (format "%s (%s)" (car language) (cdr language))
+    language))
+
+(defun translate-volcengine-ark--language-code (language)
+  "Return language code from LANGUAGE."
+  (if (consp language)
+      (cdr language)
+    language))
+
+(defun translate-volcengine-ark-select-target-language ()
+  "Select and save `translate-volcengine-ark-target-language'."
+  (interactive)
+  (let* ((candidates
+          (mapcar (lambda (language)
+                    (cons (translate-volcengine-ark--language-display language)
+                          (translate-volcengine-ark--language-code language)))
+                  translate-volcengine-ark-target-languages))
+         (current translate-volcengine-ark-target-language)
+         (default
+          (or (car (rassoc current candidates))
+              current))
+         (selected
+          (completing-read
+           (format "Target language (%s): " current)
+           candidates nil nil nil nil default)))
+    (setq translate-volcengine-ark-target-language
+          (or (cdr (assoc selected candidates))
+              selected))
+    (message "Volcengine Ark target language: %s"
+             translate-volcengine-ark-target-language)
+    translate-volcengine-ark-target-language))
+
 (defun translate-get-translation-volcengine
     (text &optional source-language target-language)
   "Get translation of TEXT using Volcengine.
@@ -395,12 +446,12 @@ With prefix argument ARG, prompt for manual input."
 ;;;###autoload
 (defun translate-volcengine-ark (&optional arg)
   "Translate using Volcengine Ark.
-With prefix argument ARG, prompt for manual input."
+With prefix argument ARG, select and save the target language first."
   (interactive "P")
+  (when arg
+    (translate-volcengine-ark-select-target-language))
   (let ((text
-         (if arg
-             (read-string "Translate text: ")
-           (translate-get-selection))))
+         (translate-get-selection)))
     (when text
       (message "text: %s" text)
       (let ((result (translate-get-translation-volcengine-ark text)))
