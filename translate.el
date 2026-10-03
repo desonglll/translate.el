@@ -186,8 +186,14 @@ automatically."
     (user-error "Invalid response from Volcengine"))
   (let ((json-object-type 'alist)
         (json-array-type 'list)
-        (json-key-type 'symbol))
-    (json-read)))
+        (json-key-type 'symbol)
+        (body (buffer-substring-no-properties (point) (point-max))))
+    (json-read-from-string
+     (if (string-match-p "[\200-\377]" body)
+         (decode-coding-string
+          (encode-coding-string body 'iso-8859-1 t)
+          'utf-8 t)
+       body))))
 
 (defun translate-volcengine--translations (response)
   "Extract translation strings from RESPONSE."
