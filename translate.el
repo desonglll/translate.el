@@ -19,6 +19,51 @@
 ;;
 ;;; Code:
 
+(require 'json)
+(require 'url)
+(require 'subr-x)
+
+(defgroup translate nil
+  "Translate text from Emacs."
+  :group 'convenience)
+
+(defcustom translate-volcengine-api-key nil
+  "API key for Volcengine machine translation.
+
+Set this from your main configuration with `getenv' instead of
+writing the key into this package file."
+  :type '(choice (const :tag "Unset" nil) string)
+  :group 'translate)
+
+(defcustom translate-volcengine-api-key-env-var "VOLCENGINE_TRANSLATE_API_KEY"
+  "Environment variable used as fallback for the Volcengine API key."
+  :type 'string
+  :group 'translate)
+
+(defcustom translate-volcengine-endpoint
+  "https://openspeech.bytedance.com/api/v3/machine_translation/matx_translate"
+  "Volcengine machine translation endpoint."
+  :type 'string
+  :group 'translate)
+
+(defcustom translate-volcengine-resource-id "volc.speech.mt"
+  "Volcengine machine translation resource id."
+  :type 'string
+  :group 'translate)
+
+(defcustom translate-volcengine-target-language "zh"
+  "Default target language for `translate-volcengine'."
+  :type 'string
+  :group 'translate)
+
+(defcustom translate-volcengine-source-language nil
+  "Default source language for `translate-volcengine'.
+
+When nil or an empty string, Volcengine detects the source language
+automatically."
+  :type '(choice (const :tag "Auto detect" nil) string)
+  :group 'translate)
+
 (defun translate-hello-world()
   "Hello world from translate-hello-world."
   (interactive)
@@ -59,6 +104,88 @@
   (let ((cmd (format "trans -brief :zh %s" (shell-quote-argument text))))
     (string-trim (shell-command-to-string cmd))))
 
+(defun translate-volcengine--api-key ()
+  "Return the configured Volcengine API key."
+  (or translate-volcengine-api-key
+      (getenv translate-volcengine-api-key-env-var)
+      (getenv "VOLCENGINE_API_KEY")
+      (user-error
+       "Missing Volcengine API key. Set `translate-volcengine-api-key' or %s"
+       translate-volcengine-api-key-env-var)))
+
+(defun translate-volcengine--request-id ()
+  "Return a unique request id for Volcengine."
+  (md5 (format "%s-%s-%s"
+               (float-time)
+               (emacs-pid)
+               (random most-positive-fixnum))))
+
+(defun translate-volcengine--parse-response ()
+  "Parse JSON response from the current `url' buffer."
+  (goto-char (point-min))
+  (unless (re-search-forward "\r?\n\r?\n" nil t)
+    (user-error "Invalid response from Volcengine"))
+  (let ((json-object-type 'alist)
+        (json-array-type 'list)
+        (json-key-type 'symbol))
+    (json-read)))
+
+(defun translate-volcengine--translations (response)
+  "Extract translation strings from RESPONSE."
+  (let ((code (alist-get 'code response))
+        (message (alist-get 'message response)))
+    (unless (equal code 20000000)
+      (user-error "Volcengine translation failed: code=%s message=%s"
+                  code message))
+    (let* ((data (alist-get 'data response))
+           (items (alist-get 'translation_list data))
+           (translations
+            (delq nil
+                  (mapcar (lambda (item)
+                            (alist-get 'translation item))
+                          items))))
+      (unless translations
+        (user-error "Volcengine response did not include translations"))
+      translations)))
+
+(defun translate-get-translation-volcengine
+    (text &optional source-language target-language)
+  "Get translation of TEXT using Volcengine.
+
+SOURCE-LANGUAGE defaults to `translate-volcengine-source-language'.
+TARGET-LANGUAGE defaults to `translate-volcengine-target-language'."
+  (let* ((source-language (or source-language
+                              translate-volcengine-source-language))
+         (target-language (or target-language
+                              translate-volcengine-target-language))
+         (body `((target_language . ,target-language)
+                 (text_list . [,text])))
+         (url-request-method "POST")
+         (url-request-extra-headers
+          `(("Content-Type" . "application/json")
+            ("X-Api-Key" . ,(translate-volcengine--api-key))
+            ("X-Api-Resource-Id" . ,translate-volcengine-resource-id)
+            ("X-Api-Request-Id" . ,(translate-volcengine--request-id))))
+         (url-request-data
+          (encode-coding-string
+           (json-encode
+            (if (and source-language
+                     (not (string-blank-p source-language)))
+                (append body `((source_language . ,source-language)))
+              body))
+           'utf-8))
+         (buffer (url-retrieve-synchronously translate-volcengine-endpoint
+                                             t t 30)))
+    (unless buffer
+      (user-error "Volcengine translation request timed out"))
+    (unwind-protect
+        (with-current-buffer buffer
+          (string-join
+           (translate-volcengine--translations
+            (translate-volcengine--parse-response))
+           "\n"))
+      (kill-buffer buffer))))
+
 ;;;###autoload
 (defun translate-trans(&optional arg)
   "Translate.
@@ -85,6 +212,20 @@ With prefix argument ARG, prompt for manual input."
     (when text
       (message "text: %s" text)
       (let ((result (translate-get-translation-argos text)))
+        (message "result: %s" result)))))
+
+;;;###autoload
+(defun translate-volcengine (&optional arg)
+  "Translate using Volcengine machine translation.
+With prefix argument ARG, prompt for manual input."
+  (interactive "P")
+  (let ((text
+         (if arg
+             (read-string "Translate text: ")
+           (translate-get-selection))))
+    (when text
+      (message "text: %s" text)
+      (let ((result (translate-get-translation-volcengine text)))
         (message "result: %s" result)))))
 
 (provide 'translate)

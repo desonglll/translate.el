@@ -7,7 +7,7 @@
 * **Context Aware**: Automatically detects text in the active region or the word at point.
 * **Smart Fallback**: If no word is found at the exact cursor position, it intelligently searches for the nearest word.
 * **Interactive Input**: Supports manual input via `universal-argument` (`C-u`).
-* **Multiple Backends**: Currently supports `translate-shell` (`trans`) and `argos-translate`.
+* **Multiple Backends**: Currently supports `translate-shell` (`trans`), `argos-translate`, and Volcengine machine translation.
 * **Zero-Dependency Core**: Only standard Emacs Lisp.
 
 ## Requirements
@@ -16,6 +16,7 @@ You must have the underlying command-line tools installed for the translation to
 
 1. **For `translate-trans`**: Install [translate-shell](https://github.com/soimort/translate-shell) (often provided as `trans`).
 2. **For `translate-argo`**: Install [argos-translate](https://github.com/argosopentech/argos-translate).
+3. **For `translate-volcengine`**: Set `VOLCENGINE_TRANSLATE_API_KEY` or configure `translate-volcengine-api-key`.
 
 ## Installation
 
@@ -43,7 +44,7 @@ In `config.el`:
 
 ```elisp
 (use-package! translate
-  :commands (translate-trans translate-argo))
+  :commands (translate-trans translate-argo translate-volcengine))
 
 ```
 
@@ -53,13 +54,30 @@ In `config.el`:
 | --- | --- |
 | `M-x translate-trans` | Translate text using `trans` (translate-shell). |
 | `M-x translate-argo` | Translate text using `argos-translate`. |
+| `M-x translate-volcengine` | Translate text using Volcengine machine translation. |
 
 ### Prefix Arguments
 
-Both commands support the `universal-argument` (`C-u`):
+Translation commands support the `universal-argument` (`C-u`):
 
 * **Default (No prefix)**: Automatically translates the current selection or the word at point.
 * **With `C-u**`: Prompts for manual input in the minibuffer.
+
+### Volcengine
+
+`translate-volcengine` uses the Volcengine machine translation API with the
+new console `X-Api-Key` authentication method.
+
+```elisp
+(setq translate-volcengine-api-key
+      (getenv "VOLCENGINE_TRANSLATE_API_KEY"))
+```
+
+By default it translates to Chinese:
+
+```elisp
+(setq translate-volcengine-target-language "zh")
+```
 
 ### Example Keybinding (Doom)
 
