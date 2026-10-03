@@ -83,9 +83,10 @@ By default it translates to Chinese:
 
 ### Volcengine Ark
 
-`translate-volcengine-ark` uses the Volcengine Ark Chat Completions API with
+`translate-volcengine-ark` uses the Volcengine Ark Responses API with
 Bearer token authentication. By default it reads `ARK_API_KEY` or
-`VOLCENGINE_ARK_API_KEY` and uses `doubao-seed-translation-250915`.
+`VOLCENGINE_ARK_API_KEY` and uses `doubao-seed-translation-250915`. You can
+also set `translate-volcengine-ark-model` to a Volcengine Ark endpoint id.
 
 ```elisp
 (setq translate-volcengine-ark-api-key

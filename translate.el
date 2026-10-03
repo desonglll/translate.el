@@ -77,13 +77,13 @@ automatically."
   :group 'translate)
 
 (defcustom translate-volcengine-ark-endpoint
-  "https://ark.cn-beijing.volces.com/api/v3/chat/completions"
-  "Volcengine Ark Chat Completions endpoint."
+  "https://ark.cn-beijing.volces.com/api/v3/responses"
+  "Volcengine Ark Responses API endpoint."
   :type 'string
   :group 'translate)
 
 (defcustom translate-volcengine-ark-model "doubao-seed-translation-250915"
-  "Default Volcengine Ark model for `translate-volcengine-ark'."
+  "Default Volcengine Ark model or endpoint id for `translate-volcengine-ark'."
   :type 'string
   :group 'translate)
 
@@ -207,35 +207,42 @@ automatically."
         (user-error "Volcengine response did not include translations"))
       translations)))
 
-(defun translate-volcengine-ark--message-content (response)
-  "Extract message content from a Volcengine Ark RESPONSE."
+(defun translate-volcengine-ark--output-text-item (item)
+  "Return output text from one Volcengine Ark response ITEM."
+  (cond
+   ((and (listp item) (equal (alist-get 'type item) "output_text"))
+    (or (alist-get 'text item) (alist-get 'content item)))
+   ((listp item)
+    (translate-volcengine-ark--output-text
+     (or (alist-get 'content item)
+         (alist-get 'output item)
+         (alist-get 'items item)))) ))
+
+(defun translate-volcengine-ark--output-text (items)
+  "Return output text from Volcengine Ark response ITEMS."
+  (cond
+   ((stringp items) items)
+   ((vectorp items)
+    (translate-volcengine-ark--output-text (append items nil)))
+   ((listp items)
+    (string-join
+     (delq nil (mapcar #'translate-volcengine-ark--output-text-item items))
+     "\n"))))
+
+(defun translate-volcengine-ark--translation (response)
+  "Extract translated text from a Volcengine Ark RESPONSE."
   (let ((error (alist-get 'error response)))
     (when error
       (user-error "Volcengine Ark translation failed: code=%s message=%s"
                   (alist-get 'code error)
                   (alist-get 'message error))))
-  (let* ((choices (alist-get 'choices response))
-         (choice (car choices))
-         (message (alist-get 'message choice))
-         (content (alist-get 'content message)))
-    (unless (and content (not (string-blank-p content)))
+  (let ((text
+         (or (alist-get 'output_text response)
+             (translate-volcengine-ark--output-text
+              (alist-get 'output response)))))
+    (unless (and text (not (string-blank-p text)))
       (user-error "Volcengine Ark response did not include translation content"))
-    (string-trim content)))
-
-(defun translate-volcengine-ark--system-prompt
-    (source-language target-language)
-  "Return system prompt for SOURCE-LANGUAGE and TARGET-LANGUAGE."
-  (string-join
-   (delq
-    nil
-    (list
-     "You are a professional translation engine."
-     (if (and source-language (not (string-blank-p source-language)))
-         (format "Translate from %s to %s." source-language target-language)
-       (format "Detect the source language and translate to %s." target-language))
-     "Only return the translated text."
-     "Preserve the original meaning, formatting, and line breaks where possible."))
-   " "))
+    (string-trim text)))
 
 (defun translate-get-translation-volcengine
     (text &optional source-language target-language)
@@ -285,15 +292,22 @@ TARGET-LANGUAGE defaults to `translate-volcengine-ark-target-language'."
                               translate-volcengine-ark-source-language))
          (target-language (or target-language
                               translate-volcengine-ark-target-language))
-         (messages
-          `[((role . "system")
-             (content . ,(translate-volcengine-ark--system-prompt
-                          source-language target-language)))
-            ((role . "user")
-             (content . ,text))])
+         (translation-options
+          `((target_language . ,target-language)))
+         (input-text
+          `((type . "input_text")
+            (text . ,text)
+            (translation_options
+             . ,(if (and source-language
+                         (not (string-blank-p source-language)))
+                    (append translation-options
+                            `((source_language . ,source-language)))
+                  translation-options))))
+         (input
+          `[((role . "user")
+             (content . [,input-text]))])
          (body `((model . ,translate-volcengine-ark-model)
-                 (messages . ,messages)
-                 (temperature . 0)))
+                 (input . ,input)))
          (url-request-method "POST")
          (url-request-extra-headers
           `(("Content-Type" . "application/json")
@@ -307,7 +321,7 @@ TARGET-LANGUAGE defaults to `translate-volcengine-ark-target-language'."
       (user-error "Volcengine Ark translation request timed out"))
     (unwind-protect
         (with-current-buffer buffer
-          (translate-volcengine-ark--message-content
+          (translate-volcengine-ark--translation
            (translate-volcengine--parse-response)))
       (kill-buffer buffer))))
 
